@@ -1,4 +1,4 @@
-# LipRead Studio
+///# LipRead Studio
 
 This repository now includes a small local inference app:
 
@@ -208,9 +208,32 @@ If you found some errors in terms of implementation please report them by submit
 - [ ] Proper documentation
 - [ ] Unit tests
 - [X] (Maybe) better curriculum learning.
-- [ ] (Maybe) some proper scripts to do dataset stuff.
+- [ ] (Maybe) some proper scripts to do dataset stuff.///
 
 ## License
-MIT License
-#   l i p - r e a d i n g - m o d e l  
- 
+# 🧠 Lip Reading Model using Deep Learning
+
+## 📌 Overview
+This project is a deep learning-based lip reading system that predicts spoken words from lip movements in video sequences or webcam input. It uses a combination of CNN (Convolutional Neural Network) and LSTM (Long Short-Term Memory) to extract spatial and temporal features from frames.
+
+---
+
+## 🚀 Features
+- Detects and processes lip movements from video input
+- Predicts spoken words or phrases
+- CNN extracts spatial features from each frame
+- LSTM captures temporal dependencies across frames
+- Can be extended for real-time applications
+
+---
+
+## 🧰 Tech Stack
+- Python 🐍
+- TensorFlow / PyTorch
+- OpenCV
+- NumPy
+- Deep Learning (CNN + LSTM)
+
+---
+
+## 📁 Project Structure
