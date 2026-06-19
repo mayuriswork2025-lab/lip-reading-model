@@ -212,3 +212,5 @@ If you found some errors in terms of implementation please report them by submit
 
 ## License
 MIT License
+#   l i p - r e a d i n g - m o d e l  
+ 
