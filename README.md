@@ -1,3 +1,10 @@
+# LipRead Studio
+
+This repository now includes a small local inference app:
+
+- a FastAPI backend that loads the existing LipNet weights once and exposes `/predict`
+- a React frontend that uploads a video and displays the transcription
+
 # LipNet: End-to-End Sentence-level Lipreading
 Keras implementation of the method described in the paper 'LipNet: End-to-End Sentence-level Lipreading' by Yannis M. Assael, Brendan Shillingford, Shimon Whiteson, and Nando de Freitas (https://arxiv.org/abs/1611.01599).
 
@@ -37,6 +44,61 @@ pip install -e .
 **Note:** if you don't want to use CUDA, you need to edit the ``setup.py`` and change ``tensorflow-gpu`` to ``tensorflow``
 
 You're done!
+
+## Quick Test Video
+
+Use the bundled sample clip at [evaluation/samples/id2_vcd_swwp2s.mpg](evaluation/samples/id2_vcd_swwp2s.mpg) for a quick test. It is already in the repo, so you can copy it into any folder you want to upload from.
+
+If you want another known-good sample, the `evaluation/samples/GRID/` folder also contains additional clips.
+
+## Run The Demo
+
+On Windows PowerShell, start both services with:
+
+```powershell
+.\start.ps1
+```
+
+Add `-OpenBrowser` if you want the frontend to open automatically.
+
+The launcher starts the backend and frontend in hidden background windows, then opens the browser to the site.
+
+After that, open the frontend at `http://127.0.0.1:5173` and check the API at `http://127.0.0.1:8000/health`.
+
+## Local Share Guide (No Docker)
+
+If you want to share this project with teammates without Docker, include the repository (Git or ZIP) and instruct them to run the provided start scripts and weight-download scripts.
+
+- `start.ps1` — existing Windows launcher (hidden windows).
+- `start.sh` — Unix launcher (creates `.venv`, installs requirements, starts backend & frontend).
+- `download_weights.sh` / `download_weights.ps1` — helper scripts to download model weights into `evaluation/models/`.
+
+Quick commands:
+
+Windows (PowerShell):
+
+```powershell
+.\start.ps1 -OpenBrowser
+```
+
+Unix (bash):
+
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+Download weights (example):
+
+```bash
+./download_weights.sh https://example.com/overlapped-weights368.h5
+```
+
+Sample test:
+- Upload `evaluation/samples/id2_vcd_swwp2s.mpg` to the frontend.
+- Expected transcript: `set white in c two soon`
+
+Logs: `backend.log`, `frontend.log`. Health check: `http://127.0.0.1:8000/health`.
 
 Here is some ideas on what you can do next:
 * Modify the package and make some improvements to it.
