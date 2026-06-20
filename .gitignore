@@ -92,6 +92,10 @@ celerybeat-schedule
 venv/
 ENV/
 
+# Word-level model (not used — sentence-only project)
+models/word_classifier.pt
+data/mouth_crops/
+
 # Frontend dependencies and logs
 frontend/node_modules/
 frontend/*.log

@@ -7,7 +7,7 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $venvPython = Join-Path $root '.venv\Scripts\python.exe'
 $frontendDir = Join-Path $root 'frontend'
 
-Write-Host '=== LipRead Studio Setup ===' -ForegroundColor Cyan
+Write-Host '=== LipRead Sentence Model Setup ===' -ForegroundColor Cyan
 Write-Host "Project: $root"
 
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
@@ -29,24 +29,18 @@ Write-Host 'Installing Python packages...'
 
 Write-Host 'Installing frontend packages...'
 Push-Location $frontendDir
-try {
-    npm install
-}
-finally {
-    Pop-Location
-}
+try { npm install } finally { Pop-Location }
 
 $env:PYTHONPATH = $root
-$modelPath = Join-Path $root 'models\word_classifier.pt'
+$sentenceModel = Join-Path $root 'models\sentence_reader.pt'
 
-if ($Retrain -or -not (Test-Path $modelPath)) {
-    Write-Host 'Building training data...'
-    & $venvPython (Join-Path $root 'scripts\bootstrap_demo.py')
-    Write-Host 'Training model (CPU — may take several minutes)...'
-    & $venvPython (Join-Path $root 'scripts\train_words.py') --epochs 8 --batch-size 4
-}
-else {
-    Write-Host "Trained model found at $modelPath"
+if ($Retrain -or -not (Test-Path $sentenceModel)) {
+    Write-Host 'Building sentence training data...'
+    & $venvPython (Join-Path $root 'scripts\bootstrap_sentence.py')
+    Write-Host 'Training sentence reader (CTC)...'
+    & $venvPython (Join-Path $root 'scripts\train_sentence.py') --epochs 20 --batch-size 4
+} else {
+    Write-Host "Sentence model found at $sentenceModel"
 }
 
 Write-Host ''
@@ -55,5 +49,5 @@ Write-Host 'Running quick test...'
 
 Write-Host ''
 Write-Host 'Setup complete!' -ForegroundColor Green
-Write-Host 'Start demo:  .\start.ps1 -OpenBrowser'
-Write-Host 'Web UI:      http://127.0.0.1:5173'
+Write-Host 'Run inference: .\.venv\Scripts\python.exe scripts\run_inference.py'
+Write-Host 'Start demo:    .\start.ps1 -OpenBrowser'

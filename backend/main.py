@@ -25,11 +25,12 @@ app.mount("/jobs", StaticFiles(directory=str(JOBS_DIR), check_dir=False), name="
 
 @app.get("/health")
 def health():
-    model_path = ROOT / "models" / "word_classifier.pt"
+    sentence_model = ROOT / "models" / "sentence_reader.pt"
     return {
         "status": "ok",
-        "model_ready": model_path.exists(),
-        "model_path": str(model_path),
+        "model_ready": sentence_model.exists(),
+        "model_path": str(sentence_model),
+        "model_type": "sentence_ctc",
     }
 
 
@@ -76,7 +77,7 @@ def predict(job_id: str):
         raise HTTPException(status_code=500, detail=job.error or "Processing failed")
     if job.status != "done":
         raise HTTPException(status_code=409, detail="Job still processing")
-    return {"prediction": job.prediction, "confidence": job.confidence}
+    return {"prediction": job.prediction, "confidence": job.confidence, "method": job.method}
 
 
 @app.post("/predict")
@@ -86,10 +87,10 @@ async def predict_direct(video: UploadFile = File(...)):
         temp_path = Path(temp_file.name)
         temp_file.write(await video.read())
     try:
-        from word_predict import predict_from_video
+        from sentence_predict import predict_sentence_from_video
 
-        prediction = predict_from_video(str(temp_path))
-        return {"prediction": prediction}
+        prediction, confidence, method = predict_sentence_from_video(str(temp_path))
+        return {"prediction": prediction, "confidence": confidence, "method": method}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:

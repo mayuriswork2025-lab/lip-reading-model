@@ -1,6 +1,17 @@
-# LipRead Studio — Lip Reading Word Classifier
+# LipRead Studio — Lip Reading (Word + Sentence)
 
-A from-scratch **CNN + BiGRU** sequence model that reads lips from short video clips and predicts spoken **words**. Includes mouth-region extraction (MediaPipe), training pipeline, and a web demo.
+A from-scratch **CNN + BiGRU** lip-reading system with **word classification** and **sentence-level CTC** decoding. Includes mouth-region extraction (MediaPipe), training pipelines, and a web demo.
+
+---
+
+## Two models (both built from scratch)
+
+| Model | Task | File | Inference |
+|-------|------|------|-----------|
+| **Word classifier** | Predict one word (6 classes) | `models/word_classifier.pt` | `word_predict.py` |
+| **Sentence reader (CTC)** | Predict full sentence (characters) | `models/sentence_reader.pt` | `sentence_predict.py` |
+
+**Default demo uses the sentence reader.** Falls back to word-segment stitching if CTC model is missing.
 
 ---
 
@@ -10,7 +21,7 @@ A from-scratch **CNN + BiGRU** sequence model that reads lips from short video c
 |---|-------------|--------|----------|
 | 1 | Dataset selected & preprocessing | Done | GRID sample clip + `data/mouth_crops/` |
 | 2 | Lip region extraction from frames | Done | `src/face_detector.py`, `src/preprocess.py` |
-| 3 | Sequence model + predictions | Done | `src/model.py`, `word_predict.py` |
+| 3 | Sequence model + predictions | Done | `src/model.py`, `sentence_predict.py` |
 | 4 | Demo short clip | Done | `evaluation/samples/id2_vcd_swwp2s.mpg` |
 | 5 | README (this file) | Done | `README.md` |
 
@@ -108,13 +119,25 @@ Input: mouth frame sequence  [B, T, 3, 96, 96]
 | Loss | CrossEntropyLoss |
 | Optimizer | Adam (lr=1e-3) |
 
-**Implementation:** `src/model.py` — class `LipReadModel`
+**Implementation:** `src/model.py` (words), `src/sentence_model.py` (sentences + CTC)
 
-**Trained vocabulary (6 words):** `set`, `white`, `with`, `p`, `two`, `soon`
+### Sentence model (CTC)
+
+```
+Full mouth sequence → CNN → BiGRU → per-frame char logits → CTC decode → sentence text
+```
+
+| Item | Value |
+|------|-------|
+| Loss | CTC (Connectionist Temporal Classification) |
+| Characters | a–z + space + blank (28 classes) |
+| Training data | `data/sentence_crops/` (31 full-sentence clips) |
+| Train script | `scripts/train_sentence.py` |
+| Demo output | `set wi on` (partial; ground truth: `set white with p two soon`) |
 
 ---
 
-## Training details
+## Model architecture (word classifier)
 
 | Parameter | Value |
 |-----------|-------|
@@ -126,7 +149,14 @@ Input: mouth frame sequence  [B, T, 3, 96, 96]
 | Hardware | CPU (local) or GPU (Google Colab) |
 | Output | `models/word_classifier.pt` |
 
-### Train from scratch
+### Train sentence reader (CTC)
+
+```powershell
+python scripts/bootstrap_sentence.py
+python scripts/train_sentence.py --epochs 20
+```
+
+### Train word classifier
 
 ```powershell
 cd D:\lip-reading-model
@@ -157,7 +187,19 @@ Open `notebooks/colab_train.ipynb`, enable GPU runtime, run all cells, download 
 
 ## How to run inference
 
-### Option 1 — Command line (recommended for testing)
+### Option 1 — Sentence inference (recommended)
+
+```powershell
+python scripts/run_inference.py --mode sentence
+```
+
+### Option 2 — Word inference
+
+```powershell
+python scripts/run_inference.py --mode word
+```
+
+### Option 3 — Command line (legacy)
 
 ```powershell
 cd D:\lip-reading-model

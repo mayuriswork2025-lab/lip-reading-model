@@ -1,4 +1,4 @@
-"""Quick end-to-end check: model load, video inference, API health."""
+"""Quick end-to-end check: sentence model load + inference."""
 import sys
 from pathlib import Path
 
@@ -6,33 +6,32 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 SAMPLE_VIDEO = ROOT / "evaluation" / "samples" / "id2_vcd_swwp2s.mpg"
-MODEL_PATH = ROOT / "models" / "word_classifier.pt"
+MODEL_PATH = ROOT / "models" / "sentence_reader.pt"
 
 
 def main():
-    print("=== LipRead Studio Demo Test ===\n")
+    print("=== LipRead Sentence Model Test ===\n")
 
     if not MODEL_PATH.exists():
         print(f"FAIL: Model missing at {MODEL_PATH}")
-        print("Run: .\\.venv\\Scripts\\python.exe scripts\\bootstrap_demo.py")
-        print("Then: .\\.venv\\Scripts\\python.exe scripts\\train_words.py --epochs 8")
+        print("Run: scripts\\bootstrap_sentence.py")
+        print("Then: scripts\\train_sentence.py --epochs 20")
         return 1
 
-    print(f"OK  Model found ({MODEL_PATH.stat().st_size // 1024} KB)")
+    print(f"OK  Sentence model found ({MODEL_PATH.stat().st_size // 1024} KB)")
 
-    crop_count = len(list((ROOT / "data" / "mouth_crops").rglob("*.npy")))
-    print(f"OK  Training crops: {crop_count}")
+    clip_count = len(list((ROOT / "data" / "sentence_crops").glob("*.npy")))
+    print(f"OK  Sentence training clips: {clip_count}")
 
     if not SAMPLE_VIDEO.exists():
         print(f"WARN: Sample video missing at {SAMPLE_VIDEO}")
-        print("Upload any front-facing speaking clip via the web UI instead.")
         return 0
 
-    from word_predict import predict_from_video
+    from sentence_predict import predict_sentence_from_video
 
-    word, confidence = predict_from_video(str(SAMPLE_VIDEO))
-    print(f"OK  Sample video prediction: '{word}' ({confidence * 100:.1f}% confidence)")
-    print("\nTrained words: set, white, with, p, two, soon")
+    sentence, confidence, method = predict_sentence_from_video(str(SAMPLE_VIDEO))
+    print(f"OK  Prediction: '{sentence}' ({confidence * 100:.1f}% confidence, {method})")
+    print("\nGround truth: set white with p two soon")
     print("Start demo: .\\start.ps1 -OpenBrowser")
     return 0
 

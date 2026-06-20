@@ -70,7 +70,7 @@ export default function App() {
         setPrediction(predictData.prediction || 'No prediction');
         setConfidence(
           typeof predictData.confidence === 'number'
-            ? `${(predictData.confidence * 100).toFixed(1)}%`
+            ? `${(predictData.confidence * 100).toFixed(1)}% (${predictData.method || 'inference'})`
             : null
         );
         return;
@@ -134,8 +134,8 @@ export default function App() {
         <p className="eyebrow">LipRead Studio</p>
         <h1>Upload a speaking video and decode lip movement into text.</h1>
         <p className="lede">
-          Built from scratch with a CNN + GRU word classifier. The backend crops mouth frames with
-          MediaPipe, shows the extracted sequence, and predicts the closest trained word.
+          Built from scratch with CNN + GRU models. Upload a clip to extract mouth frames
+          and decode a full sentence (CTC) or word sequence.
         </p>
         <div className="status-bar">
           <span className="status-dot" />

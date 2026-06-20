@@ -21,6 +21,7 @@ class JobState:
     frame_urls: list[str] = field(default_factory=list)
     prediction: str = ""
     confidence: float = 0.0
+    method: str = ""
     error: str = ""
 
 
@@ -74,9 +75,10 @@ def _process_job(job_id: str):
         ]
         job.progress = 0.85
 
-        prediction, confidence = _predict_word_sequence(mouth_arr)
+        prediction, confidence, method = _predict_sentence(mouth_arr, job.video_path)
         job.prediction = prediction
         job.confidence = confidence
+        job.method = method
         job.status = "done"
         job.progress = 1.0
     except Exception as exc:
@@ -91,7 +93,8 @@ def _process_job(job_id: str):
                 pass
 
 
-def _predict_word_sequence(mouth_arr):
-    from word_predict import predict_word_sequence
+def _predict_sentence(mouth_arr, video_path):
+    from sentence_predict import predict_sentence_ctc
 
-    return predict_word_sequence(mouth_arr)
+    sentence, confidence = predict_sentence_ctc(mouth_arr)
+    return sentence, confidence, "ctc"
