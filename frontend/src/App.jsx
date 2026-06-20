@@ -13,8 +13,29 @@ export default function App() {
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState(0);
   const [frameUrls, setFrameUrls] = useState([]);
+  const [backendInfo, setBackendInfo] = useState('');
 
   const acceptedTypes = useMemo(() => '.mp4,.mpeg,.mpg,.mov,.webm', []);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/health`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.model_type === 'sentence_ctc') {
+          setBackendInfo(`Sentence model ready (${data.model_type})`);
+        } else {
+          setBackendInfo(
+            'Wrong backend running (word model). Stop old server and run .\\start.ps1 again.'
+          );
+          setError(
+            'Old word-classifier backend detected. Restart with .\\scripts\\stop_servers.ps1 then .\\start.ps1'
+          );
+        }
+      })
+      .catch(() => {
+        setBackendInfo('Backend not reachable at ' + API_BASE);
+      });
+  }, []);
 
   const handleFile = (nextFile) => {
     setError('');
@@ -134,8 +155,8 @@ export default function App() {
         <p className="eyebrow">LipRead Studio</p>
         <h1>Upload a speaking video and decode lip movement into text.</h1>
         <p className="lede">
-          Built from scratch with CNN + GRU models. Upload a clip to extract mouth frames
-          and decode a full sentence (CTC) or word sequence.
+          Built from scratch with CNN + GRU + CTC. Upload a clip with a full spoken sentence
+          (not a single word) to decode lip movement into text.
         </p>
         <div className="status-bar">
           <span className="status-dot" />
@@ -178,7 +199,9 @@ export default function App() {
             <button className="primary-button" type="submit" disabled={isSubmitting}>
               {isSubmitting ? 'Processing...' : 'Run LipRead Studio'}
             </button>
-            <p className="hint">Accepted: MP4, MPG, MPEG, MOV, WEBM</p>
+            <p className="hint">
+              Accepted: MP4, MPG, MPEG, MOV, WEBM. Try sample: evaluation/samples/sentence_demo.mp4
+            </p>
           </div>
 
           {error ? <div className="message error">{error}</div> : null}
@@ -192,6 +215,7 @@ export default function App() {
             <span>API</span>
             <strong>{API_BASE}</strong>
           </div>
+          {backendInfo ? <p className="hint">{backendInfo}</p> : null}
         </aside>
       </section>
 

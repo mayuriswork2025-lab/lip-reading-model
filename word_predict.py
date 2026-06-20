@@ -29,7 +29,7 @@ def _load_model():
     return model, idx_to_label, labels
 
 
-def _prepare_tensor(mouth_arr):
+def _prepare_tensor(mouth_arr, max_frames=MAX_FRAMES):
     frames = mouth_arr.astype(np.float32) / 255.0
     if frames.ndim == 3:
         frames = np.repeat(frames[..., None], 3, axis=-1)

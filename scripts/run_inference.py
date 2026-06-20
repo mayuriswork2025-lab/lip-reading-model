@@ -12,7 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-DEFAULT_DEMO = ROOT / "evaluation" / "samples" / "id2_vcd_swwp2s.mpg"
+DEFAULT_DEMO = ROOT / "evaluation" / "samples" / "sentence_demo.mp4"
+FALLBACK_DEMO = ROOT / "evaluation" / "samples" / "id2_vcd_swwp2s.mpg"
 
 
 def main():
@@ -21,6 +22,9 @@ def main():
     args = parser.parse_args()
 
     video_path = Path(args.video)
+    if str(args.video) == str(DEFAULT_DEMO) and not video_path.exists() and FALLBACK_DEMO.exists():
+        video_path = FALLBACK_DEMO
+        print(f"Note: sentence_demo.mp4 not found, using {FALLBACK_DEMO.name}")
     if not video_path.exists():
         print(f"Video not found: {video_path}")
         return 1
