@@ -28,11 +28,9 @@ def main():
         print("Upload any front-facing speaking clip via the web UI instead.")
         return 0
 
-    from src.preprocess import process_video
-    from word_predict import predict_word_sequence
+    from word_predict import predict_from_video
 
-    mouth_arr, _ = process_video(str(SAMPLE_VIDEO), max_frames=75, output_size=(96, 96))
-    word, confidence = predict_word_sequence(mouth_arr)
+    word, confidence = predict_from_video(str(SAMPLE_VIDEO))
     print(f"OK  Sample video prediction: '{word}' ({confidence * 100:.1f}% confidence)")
     print("\nTrained words: set, white, with, p, two, soon")
     print("Start demo: .\\start.ps1 -OpenBrowser")

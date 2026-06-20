@@ -1,239 +1,283 @@
-///# LipRead Studio
+# LipRead Studio — Lip Reading Word Classifier
 
-This repository now includes a small local inference app:
+A from-scratch **CNN + BiGRU** sequence model that reads lips from short video clips and predicts spoken **words**. Includes mouth-region extraction (MediaPipe), training pipeline, and a web demo.
 
-- a FastAPI backend that loads the existing LipNet weights once and exposes `/predict`
-- a React frontend that uploads a video and displays the transcription
+---
 
-# LipNet: End-to-End Sentence-level Lipreading
-Keras implementation of the method described in the paper 'LipNet: End-to-End Sentence-level Lipreading' by Yannis M. Assael, Brendan Shillingford, Shimon Whiteson, and Nando de Freitas (https://arxiv.org/abs/1611.01599).
+## Deliverables checklist
 
-![LipNet performing prediction (subtitle alignment only for visualization)](assets/lipreading.gif)
+| # | Deliverable | Status | Location |
+|---|-------------|--------|----------|
+| 1 | Dataset selected & preprocessing | Done | GRID sample clip + `data/mouth_crops/` |
+| 2 | Lip region extraction from frames | Done | `src/face_detector.py`, `src/preprocess.py` |
+| 3 | Sequence model + predictions | Done | `src/model.py`, `word_predict.py` |
+| 4 | Demo short clip | Done | `evaluation/samples/id2_vcd_swwp2s.mpg` |
+| 5 | README (this file) | Done | `README.md` |
 
-## Results
-|       Scenario          | Epoch |  CER  |  WER  |  BLEU |
-|:-----------------------:|:-----:|:-----:|:-----:|:-----:|
-|  Unseen speakers [C]    |  N/A  |  N/A  |  N/A  |  N/A  |
-|    Unseen speakers      |  178  |  6.19%  |  14.19%  |  88.21%  |
-| Overlapped speakers [C] |  N/A  |  N/A  |  N/A  |  N/A  |
-|   Overlapped speakers   |  368  |  1.56%  |  3.38%  |  96.93%  |
+---
 
-**Notes**:
+## Demo short clip
 
-- [C] means using curriculum learning.
-- N/A means either the training is in progress or haven't been performed.
-- Your contribution in sharing the results of this model is highly appreciated :)
+**File:** `evaluation/samples/id2_vcd_swwp2s.mpg`
 
-## Dependencies
-* Keras 2.0+
-* Tensorflow 1.0+
-* PIP (for package installation)
+| Property | Value |
+|----------|-------|
+| Source | [GRID Corpus](http://spandh.dcs.shef.ac.uk/gridcorpus/) — speaker s2 |
+| Duration | ~3 seconds |
+| Ground-truth sentence | `set white with p two soon` |
+| Alignment file | `evaluation/samples/swwp2s.align` |
 
-Plus several other libraries listed on `setup.py`
+Use this clip to test inference locally or in the web UI.
 
-## Usage
-To use the model, first you need to clone the repository:
+---
+
+## Dataset source
+
+### Primary dataset: GRID Corpus (subset)
+
+- **Official site:** http://spandh.dcs.shef.ac.uk/gridcorpus/
+- **Paper reference:** Assael et al., *LipNet: End-to-End Sentence-level Lipreading* ([arXiv:1611.01599](https://arxiv.org/abs/1611.01599))
+- **Why GRID:** Fixed ~51-word vocabulary, studio lighting, 25 fps, alignment files included
+
+### What we use in this project
+
+| Item | Details |
+|------|---------|
+| Raw video | 1 clip from GRID speaker s2 (`id2_vcd_swwp2s.mpg`) |
+| Alignments | Word-level timestamps in `swwp2s.align` |
+| Processed data | `data/mouth_crops/` — 127 `.npy` files (6 word classes) |
+| Augmentation | Flip, brightness jitter, frame shift (20 copies per word) |
+
+### Preprocessing pipeline
+
 ```
-git clone https://github.com/rizkiarm/LipNet
+Raw video (.mpg)
+    → Frame extraction (75 frames max, 25 fps)
+    → Face detection + lip landmark crop (MediaPipe, 96×96 px)
+    → NumPy array saved as .npy  [T × H × W × C]
 ```
-Then you can install the package:
-```
-cd LipNet/
-pip install -e .
-```
-**Note:** if you don't want to use CUDA, you need to edit the ``setup.py`` and change ``tensorflow-gpu`` to ``tensorflow``
 
-You're done!
+**Scripts:**
+- `scripts/bootstrap_demo.py` — build training set from sample clip
+- `src/preprocess.py` — video → mouth crop sequence
+- `src/face_detector.py` — MediaPipe lip landmarks + Haar fallback
 
-## Quick Test Video
+### Expanding to more speakers (optional)
 
-Use the bundled sample clip at [evaluation/samples/id2_vcd_swwp2s.mpg](evaluation/samples/id2_vcd_swwp2s.mpg) for a quick test. It is already in the repo, so you can copy it into any folder you want to upload from.
-
-If you want another known-good sample, the `evaluation/samples/GRID/` folder also contains additional clips.
-
-## Run The Demo
-
-On Windows PowerShell, start both services with:
+Download GRID speakers s1–s3 (~2–3 GB) and run:
 
 ```powershell
-.\start.ps1
+python scripts/bootstrap_demo.py   # single-clip demo
+# For multi-speaker: use scripts/preprocess_grid.py (when GRID raw data is present)
 ```
 
-Add `-OpenBrowser` if you want the frontend to open automatically.
+---
 
-The launcher starts the backend and frontend in hidden background windows, then opens the browser to the site.
+## Model architecture
 
-After that, open the frontend at `http://127.0.0.1:5173` and check the API at `http://127.0.0.1:8000/health`.
+**Type:** Word-level sequence classifier (CNN spatial encoder + temporal GRU)
 
-## Local Share Guide (No Docker)
+```
+Input: mouth frame sequence  [B, T, 3, 96, 96]
+              │
+              ▼
+    ┌─────────────────────┐
+    │  CNN (per frame)    │  Conv2d 3→32→64→128 + MaxPool + AdaptiveAvgPool(4)
+    │  Feature: 2048-d    │
+    └─────────┬───────────┘
+              │  reshape → [B, T, 2048]
+              ▼
+    ┌─────────────────────┐
+    │  BiGRU (2 layers)   │  hidden=256, bidirectional → 512-d per step
+    └─────────┬───────────┘
+              │  temporal mean pooling
+              ▼
+    ┌─────────────────────┐
+    │  Linear classifier  │  512 → num_classes
+    └─────────┬───────────┘
+              ▼
+    Softmax → predicted word
+```
 
-If you want to share this project with teammates without Docker, include the repository (Git or ZIP) and instruct them to run the provided start scripts and weight-download scripts.
+| Layer | Details |
+|-------|---------|
+| CNN | 3× Conv2d blocks (32, 64, 128 channels), ReLU, MaxPool |
+| Sequence | 2-layer Bidirectional GRU, 256 hidden units |
+| Pooling | Mean over time steps |
+| Output | Softmax over word classes |
+| Loss | CrossEntropyLoss |
+| Optimizer | Adam (lr=1e-3) |
 
-- `start.ps1` — existing Windows launcher (hidden windows).
-- `start.sh` — Unix launcher (creates `.venv`, installs requirements, starts backend & frontend).
-- `download_weights.sh` / `download_weights.ps1` — helper scripts to download model weights into `evaluation/models/`.
+**Implementation:** `src/model.py` — class `LipReadModel`
 
-Quick commands:
+**Trained vocabulary (6 words):** `set`, `white`, `with`, `p`, `two`, `soon`
 
-Windows (PowerShell):
+---
+
+## Training details
+
+| Parameter | Value |
+|-----------|-------|
+| Framework | PyTorch 2.2 |
+| Epochs | 8–12 |
+| Batch size | 4–8 |
+| Max frames per clip | 40 |
+| Train/val split | 80/20 stratified by label |
+| Hardware | CPU (local) or GPU (Google Colab) |
+| Output | `models/word_classifier.pt` |
+
+### Train from scratch
+
+```powershell
+cd D:\lip-reading-model
+$env:PYTHONPATH = "D:\lip-reading-model"
+
+# Step 1: Build mouth-crop dataset from demo clip
+.\.venv\Scripts\python.exe scripts\bootstrap_demo.py
+
+# Step 2: Train CNN+GRU model
+.\.venv\Scripts\python.exe scripts\train_words.py --epochs 12 --batch-size 4
+```
+
+### Train on GPU (Colab)
+
+Open `notebooks/colab_train.ipynb`, enable GPU runtime, run all cells, download `word_classifier.pt`.
+
+### Checkpoint contents
+
+```python
+{
+    "state_dict": ...,      # model weights
+    "labels": [...],        # word list
+    "label_to_idx": {...}   # label mapping
+}
+```
+
+---
+
+## How to run inference
+
+### Option 1 — Command line (recommended for testing)
+
+```powershell
+cd D:\lip-reading-model
+$env:PYTHONPATH = "D:\lip-reading-model"
+
+# Demo clip
+.\.venv\Scripts\python.exe scripts\run_inference.py
+
+# Your own video
+.\.venv\Scripts\python.exe scripts\run_inference.py path\to\your_video.mp4
+```
+
+**Example output:**
+```
+Prediction:  white
+Confidence:  17.9%
+Top predictions:
+  1. white     17.9%
+  2. set       16.2%
+  ...
+```
+
+### Option 2 — Python API
+
+```python
+from word_predict import predict_from_video
+
+word, confidence = predict_from_video("evaluation/samples/id2_vcd_swwp2s.mpg")
+print(word, confidence)
+```
+
+### Option 3 — Web UI
 
 ```powershell
 .\start.ps1 -OpenBrowser
 ```
 
-Unix (bash):
+1. Open http://127.0.0.1:5173
+2. Upload `evaluation\samples\id2_vcd_swwp2s.mpg`
+3. Click **Run LipRead Studio**
+4. View mouth frame gallery + prediction
 
-```bash
-chmod +x start.sh
-./start.sh
+### Option 4 — FastAPI
+
+```powershell
+# Health check
+curl http://127.0.0.1:8000/health
+
+# Upload + predict (via UI or POST /upload then GET /predict/{job_id})
 ```
 
-Download weights (example):
+### Quick sanity test
 
-```bash
-./download_weights.sh https://example.com/overlapped-weights368.h5
+```powershell
+.\.venv\Scripts\python.exe scripts\test_demo.py
 ```
 
-Sample test:
-- Upload `evaluation/samples/id2_vcd_swwp2s.mpg` to the frontend.
-- Expected transcript: `set white in c two soon`
+---
 
-Logs: `backend.log`, `frontend.log`. Health check: `http://127.0.0.1:8000/health`.
-
-Here is some ideas on what you can do next:
-* Modify the package and make some improvements to it.
-* Train the model using predefined training scenarios.
-* Make your own training scenarios.
-* Use [pre-trained weights](https://github.com/rizkiarm/LipNet/tree/master/evaluation/models) to do lipreading.
-* Go crazy and experiment on other dataset! by changing some hyperparameters or modify the model.
-
-## Dataset
-This model uses GRID corpus (http://spandh.dcs.shef.ac.uk/gridcorpus/)
-
-## Pre-trained weights
-For those of you who are having difficulties in training the model (or just want to see the end results), you can download and use the weights provided here: https://github.com/rizkiarm/LipNet/tree/master/evaluation/models. 
-
-More detail on saving and loading weights can be found in [Keras FAQ](https://keras.io/getting-started/faq/#how-can-i-save-a-keras-model).
-
-## Training
-There are five different training scenarios that are (going to be) available:
-
-### Prerequisites
-1. Download all video (normal) and align from the GRID Corpus website.
-2. Extracts all the videos and aligns.
-3. Create ``datasets`` folder on each training scenario folder.
-4. Create ``align`` folder inside the ``datasets`` folder.
-5. All current ``train.py`` expect the videos to be in the form of 100x50px mouthcrop image frames.
-You can change this by adding ``vtype = "face"`` and ``face_predictor_path`` (which can be found in ``evaluation/models``) in the instantiation of ``Generator`` inside the ``train.py``
-6. The other way would be to extract the mouthcrop image using ``scripts/extract_mouth_batch.py`` (usage can be found inside the script).
-7. Create symlink from each ``training/*/datasets/align`` to your align folder.
-8. You can change the training parameters by modifying ``train.py`` inside its respective scenarios.
-
-### Random split (Unmaintained)
-Create symlink from ``training/random_split/datasets/video`` to your video dataset folder (which contains ``s*`` directory).
-
-Train the model using the following command:
-```
-./train random_split [GPUs (optional)]
-```
-
-**Note:** You can change the validation split value by modifying the ``val_split`` argument inside the ``train.py``.
-### Unseen speakers
-Create the following folder:
-* ``training/unseen_speakers/datasets/train``
-* ``training/unseen_speakers/datasets/val``
-
-Then, create symlink from ``training/unseen_speakers/datasets/[train|val]/s*`` to your selection of ``s*`` inside of the video dataset folder.
-
-The paper used ``s1``, ``s2``, ``s20``, and ``s22`` for evaluation and the remainder for training.
-
-Train the model using the following command:
-```
-./train unseen_speakers [GPUs (optional)]
-```
-### Unseen speakers with curriculum learning
-The same way you do unseen speakers.
-
-**Note:** You can change the curriculum by modifying the ``curriculum_rules`` method inside the ``train.py``
+## Project structure
 
 ```
-./train unseen_speakers_curriculum [GPUs (optional)]
+D:\lip-reading-model\
+├── README.md                       # This file
+├── models\word_classifier.pt       # Trained sequence model
+├── data\mouth_crops\               # Preprocessed training clips
+├── evaluation\samples\
+│   ├── id2_vcd_swwp2s.mpg          # Demo short clip
+│   └── swwp2s.align                # Word alignments
+├── src\
+│   ├── model.py                    # CNN + BiGRU architecture
+│   ├── face_detector.py            # Lip region extraction
+│   ├── preprocess.py               # Video → mouth crops
+│   ├── dataset.py                  # PyTorch Dataset
+│   └── data_loader.py              # Alignment parsing, splits
+├── scripts\
+│   ├── bootstrap_demo.py           # Build training data
+│   ├── train_words.py              # Train model
+│   ├── run_inference.py            # Run predictions
+│   └── test_demo.py                # End-to-end test
+├── backend\                        # FastAPI server
+├── frontend\                       # React upload UI
+├── setup.ps1                       # First-time setup
+└── start.ps1                       # Launch demo
 ```
 
-### Overlapped Speakers
-Run the preparation script:
-```
-python prepare.py [Path to video dataset] [Path to align dataset] [Number of samples]
-```
-**Notes:**
-- ``[Path to video dataset]`` should be a folder with structure: ``/s{i}/[video]``
-- ``[Path to align dataset]`` should be a folder with structure: ``/[align].align``
-- ``[Number of samples]`` should be less than or equal to ``min(len(ls '/s{i}/*'))``
+---
 
-Then run training for each speaker:
-```
-python training/overlapped_speakers/train.py s{i}
+## Setup (first time)
+
+```powershell
+cd D:\lip-reading-model
+.\setup.ps1
 ```
 
-### Overlapped Speakers with curriculum learning
-Copy the ``prepare.py`` from ``overlapped_speakers`` folder to ``overlapped_speakers_curriculum`` folder, 
-and run it as previously described in overlapped speakers training explanation.
+Requires **Python 3.10+** and **Node.js 18+**.
 
-Then run training for each speaker:
-```
-python training/overlapped_speakers_curriculum/train.py s{i}
-```
-**Note:** As always, you can change the curriculum by modifying the ``curriculum_rules`` method inside the ``train.py``
+---
 
-## Evaluation
-To evaluate and visualize the trained model on a single video / image frames, you can execute the following command:
-```
-./predict [path to weight] [path to video]
-```
-**Example:**
-```
-./predict evaluation/models/overlapped-weights368.h5 evaluation/samples/id2_vcd_swwp2s.mpg
-```
-## Work in Progress
-This is a work in progress. Errors are to be expected.
-If you found some errors in terms of implementation please report them by submitting issue(s) or making PR(s). Thanks!
+## Team roles
 
-**Some todos:**
-- [X] Use ~~Stanford-CTC~~ Tensorflow CTC beam search
-- [X] Auto spelling correction
-- [X] Overlapped speakers (and its curriculum) training
-- [ ] Integrate language model for beam search
-- [ ] RGB normalization over the dataset.
-- [X] Validate CTC implementation in training.
-- [ ] Proper documentation
-- [ ] Unit tests
-- [X] (Maybe) better curriculum learning.
-- [ ] (Maybe) some proper scripts to do dataset stuff.///
+| Role | Files |
+|------|-------|
+| ML Engineer | `src/model.py`, `scripts/train_words.py` |
+| Data Engineer | `scripts/bootstrap_demo.py`, `data/mouth_crops/` |
+| Backend Developer | `backend/`, `src/preprocess.py` |
+| Frontend Developer | `frontend/` |
+| Project Lead | `scripts/test_demo.py`, `scripts/run_inference.py` |
+
+---
+
+## References
+
+- GRID Corpus: http://spandh.dcs.shef.ac.uk/gridcorpus/
+- LipNet paper: https://arxiv.org/abs/1611.01599
+- MediaPipe Face Mesh: https://google.github.io/mediapipe/solutions/face_mesh.html
+- Original repo base: https://github.com/tanvih23/lip-reading-model
+
+---
 
 ## License
-# 🧠 Lip Reading Model using Deep Learning
 
-## 📌 Overview
-This project is a deep learning-based lip reading system that predicts spoken words from lip movements in video sequences or webcam input. It uses a combination of CNN (Convolutional Neural Network) and LSTM (Long Short-Term Memory) to extract spatial and temporal features from frames.
-
----
-
-## 🚀 Features
-- Detects and processes lip movements from video input
-- Predicts spoken words or phrases
-- CNN extracts spatial features from each frame
-- LSTM captures temporal dependencies across frames
-- Can be extended for real-time applications
-
----
-
-## 🧰 Tech Stack
-- Python 🐍
-- TensorFlow / PyTorch
-- OpenCV
-- NumPy
-- Deep Learning (CNN + LSTM)
-
----
-
-## 📁 Project Structure
+MIT License (see `LICENSE`)
