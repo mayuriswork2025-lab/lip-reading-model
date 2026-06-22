@@ -70,8 +70,6 @@ def extract(video_path, save_path=None):
                 continue
 
             mouth = cv2.cvtColor(mouth, cv2.COLOR_BGR2GRAY)
-
-            # LipNet expects 100x50
             mouth = cv2.resize(mouth, (100, 50))
 
             frames.append(mouth)
@@ -80,7 +78,6 @@ def extract(video_path, save_path=None):
 
     frames = np.array(frames)
 
-    # Limit to 75 frames
     if len(frames) > 75:
         frames = frames[:75]
 
