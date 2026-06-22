@@ -42,7 +42,7 @@ class LipReaderCNN(nn.Module):
         #      exact pixel position -- gives the network some tolerance to
         #      the mouth being a couple pixels off-center between frames.
         self.pool = nn.MaxPool2d(kernel_size=2)
-         We need to know the final flattened size after two conv+pool
+        #We need to know the final flattened size after two conv+pool
         # rounds, to wire up the next layer correctly. Starting at 64x64:
         #   after pool 1: 64 / 2 = 32x32
         #   after pool 2: 32 / 2 = 16x16
@@ -84,7 +84,7 @@ class LipReaderCNN(nn.Module):
 
         x = self.fc(x)         # compress down to a 128-number feature vector
         return x
-        class LipReaderModel(nn.Module):
+class LipReaderModel(nn.Module):
     """
     THE FULL MODEL. Wraps the per-frame CNN above, runs it across every
     frame in a video, feeds that sequence into an LSTM, and produces a
