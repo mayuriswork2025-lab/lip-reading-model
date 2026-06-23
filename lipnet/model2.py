@@ -1,9 +1,9 @@
-from keras.layers import Conv3D, ZeroPadding3D, MaxPooling3D, Dense, Activation, SpatialDropout3D, Flatten
-from keras.layers import Bidirectional, TimeDistributed, GRU, BatchNormalization
-from keras.layers import Input
-from keras.models import Model
+from tensorflow.keras.layers import Conv3D, ZeroPadding3D, MaxPooling3D, Dense, Activation, SpatialDropout3D, Flatten
+from tensorflow.keras.layers import Bidirectional, TimeDistributed, GRU, BatchNormalization
+from tensorflow.keras.layers import Input
+from tensorflow.keras.models import Model
 from lipnet.core.layers import CTC
-from keras import backend as K
+from tensorflow.keras import backend as K
 
 
 class LipNet(object):

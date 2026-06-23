@@ -92,6 +92,15 @@ celerybeat-schedule
 venv/
 ENV/
 
+# Frontend dependencies and logs
+frontend/node_modules/
+frontend/*.log
+pip-install.log
+pip-install.out.log
+pip-install.err.log
+pip-install-light.out.log
+pip-install-light.err.log
+
 # Spyder project settings
 .spyderproject
 .spyproject
