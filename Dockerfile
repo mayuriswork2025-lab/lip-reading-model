@@ -3,6 +3,9 @@ FROM python:3.11-slim
 # System libraries required by OpenCV and MediaPipe at runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
+    libglx-mesa0 \
+    libegl1 \
+    libgles2 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
