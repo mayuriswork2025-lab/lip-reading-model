@@ -7,8 +7,6 @@ Same lip pipeline as training data:
 Uses the new MediaPipe Tasks API (FaceLandmarker) since mediapipe>=0.10.30
 removed the legacy mp.solutions.face_mesh API this code originally used.
 
-Member D wires:  upload -> preprocess_upload_video() -> Person C predict_word()
-
 Usage:
     from preprocess_upload import preprocess_upload_video
 
@@ -17,6 +15,7 @@ Usage:
 """
 
 import os
+import time
 import urllib.request
 
 import cv2
@@ -143,7 +142,14 @@ def preprocess_upload_video(video_path, start_frame=None, end_frame=None):
 
     frames = []
     last_bbox = None
-    timestamp_ms = 0
+    # IMPORTANT: the landmarker instance is a module-level singleton reused
+    # across requests. MediaPipe's VIDEO mode tracks the last timestamp it
+    # saw *per landmarker instance*, not per video — so starting back at 0
+    # for every new request will be "less than" the previous request's final
+    # timestamp and trigger "Input timestamp must be monotonically increasing."
+    # Using a monotonic wall-clock-based timestamp guarantees it always moves
+    # forward, no matter how many videos this same landmarker has processed.
+    timestamp_ms = int(time.monotonic() * 1000)
     # Guard against fps metadata being 0, very high, or otherwise unreliable —
     # always advance by at least 1ms so timestamps are strictly increasing.
     frame_duration_ms = max(1, int(1000 / fps)) if fps > 0 else 33
