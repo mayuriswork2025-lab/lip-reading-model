@@ -144,7 +144,9 @@ def preprocess_upload_video(video_path, start_frame=None, end_frame=None):
     frames = []
     last_bbox = None
     timestamp_ms = 0
-    frame_duration_ms = int(1000 / fps)
+    # Guard against fps metadata being 0, very high, or otherwise unreliable —
+    # always advance by at least 1ms so timestamps are strictly increasing.
+    frame_duration_ms = max(1, int(1000 / fps)) if fps > 0 else 33
 
     for _ in range(start, end + 1):
         ok, frame = cap.read()
