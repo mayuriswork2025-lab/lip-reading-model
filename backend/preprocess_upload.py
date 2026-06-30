@@ -2,7 +2,10 @@
 Preprocess a raw uploaded video for inference (Member D backend).
 
 Same lip pipeline as training data:
-  raw video -> MediaPipe lip crop -> grayscale 96x96 -> (20, 96, 96) numpy array
+  raw video -> MediaPipe FaceLandmarker lip crop -> grayscale 96x96 -> (20, 96, 96) numpy array
+
+Uses the new MediaPipe Tasks API (FaceLandmarker) since mediapipe>=0.10.30
+removed the legacy mp.solutions.face_mesh API this code originally used.
 
 Member D wires:  upload -> preprocess_upload_video() -> Person C predict_word()
 
@@ -13,9 +16,14 @@ Usage:
     word = predict_word(clip)
 """
 
+import os
+import urllib.request
+
 import cv2
-import mediapipe as mp
 import numpy as np
+import mediapipe as mp
+from mediapipe.tasks import python as mp_python
+from mediapipe.tasks.python import vision as mp_vision
 
 # Must match extract_lips.py / training data
 LIP_WIDTH = 96
@@ -29,6 +37,37 @@ LIP_LANDMARKS = [
     0, 267, 269, 270, 409, 415, 310, 311, 312, 13, 82, 81,
     42, 183, 78,
 ]
+
+# Where to cache the FaceLandmarker model bundle on disk
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "face_landmarker.task")
+MODEL_URL = (
+    "https://storage.googleapis.com/mediapipe-models/face_landmarker/"
+    "face_landmarker/float16/1/face_landmarker.task"
+)
+
+# Module-level singleton so we don't reload the model on every request
+_landmarker = None
+
+
+def _ensure_model_downloaded():
+    """Download the FaceLandmarker .task bundle once, cache it on disk."""
+    if os.path.isfile(MODEL_PATH) and os.path.getsize(MODEL_PATH) > 1_000_000:
+        return
+    urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+
+
+def _get_landmarker():
+    global _landmarker
+    if _landmarker is None:
+        _ensure_model_downloaded()
+        base_options = mp_python.BaseOptions(model_asset_path=MODEL_PATH)
+        options = mp_vision.FaceLandmarkerOptions(
+            base_options=base_options,
+            running_mode=mp_vision.RunningMode.VIDEO,
+            num_faces=1,
+        )
+        _landmarker = mp_vision.FaceLandmarker.create_from_options(options)
+    return _landmarker
 
 
 def lip_bbox_from_landmarks(landmarks, width, height, padding=PADDING):
@@ -86,54 +125,53 @@ def preprocess_upload_video(video_path, start_frame=None, end_frame=None):
     Raises:
         FileNotFoundError, RuntimeError if video cannot be read or no face found
     """
-    if not video_path or not __import__("os").path.isfile(video_path):
+    if not video_path or not os.path.isfile(video_path):
         raise FileNotFoundError(f"Video not found: {video_path}")
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open video: {video_path}")
 
+    fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     start = 0 if start_frame is None else max(0, int(start_frame))
     end = (total - 1) if end_frame is None else min(int(end_frame), total - 1)
 
     cap.set(cv2.CAP_PROP_POS_FRAMES, start)
 
+    landmarker = _get_landmarker()
+
     frames = []
     last_bbox = None
+    timestamp_ms = 0
+    frame_duration_ms = int(1000 / fps)
 
-    mp_face_mesh = mp.solutions.face_mesh
-    with mp_face_mesh.FaceMesh(
-        static_image_mode=False,
-        max_num_faces=1,
-        refine_landmarks=True,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
-    ) as face_mesh:
-        for _ in range(start, end + 1):
-            ok, frame = cap.read()
-            if not ok:
-                break
+    for _ in range(start, end + 1):
+        ok, frame = cap.read()
+        if not ok:
+            break
 
-            h, w = frame.shape[:2]
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            result = face_mesh.process(rgb)
+        h, w = frame.shape[:2]
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
-            bbox = None
-            if result.multi_face_landmarks:
-                bbox = lip_bbox_from_landmarks(
-                    result.multi_face_landmarks[0].landmark, w, h
-                )
-            if bbox is None and last_bbox is not None:
-                bbox = last_bbox
-            if bbox is None:
-                continue
+        # Timestamps must be strictly increasing for VIDEO running mode
+        timestamp_ms += frame_duration_ms
+        result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
-            last_bbox = bbox
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            lip = crop_and_resize(gray, bbox)
-            if lip is not None:
-                frames.append(lip)
+        bbox = None
+        if result.face_landmarks:
+            bbox = lip_bbox_from_landmarks(result.face_landmarks[0], w, h)
+        if bbox is None and last_bbox is not None:
+            bbox = last_bbox
+        if bbox is None:
+            continue
+
+        last_bbox = bbox
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        lip = crop_and_resize(gray, bbox)
+        if lip is not None:
+            frames.append(lip)
 
     cap.release()
 
@@ -151,4 +189,3 @@ if __name__ == "__main__":
         sys.exit(1)
     arr = preprocess_upload_video(sys.argv[1])
     print("OK shape:", arr.shape, "dtype:", arr.dtype)
-    
